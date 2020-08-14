@@ -88,13 +88,21 @@ func Register(r *route.Router, curConf func() config.Config, confPath string, re
 			return
 		}
 		configFile, err := os.OpenFile(confPath, os.O_RDWR|os.O_CREATE, 0644)
-		defer configFile.Close()
+
 		if err != nil {
 			http.Error(w, fmt.Sprintf("failed to open old config: %s", err), http.StatusInternalServerError)
+			return
+
 		}
 
 		if _, err := io.Copy(configFile, req.Body); err != nil {
 			http.Error(w, fmt.Sprintf("failed to sync config: %s", err), http.StatusInternalServerError)
+			return
+		}
+		if err := configFile.Close(); err != nil {
+			http.Error(w, fmt.Sprintf("failed to save config: %s", err), http.StatusInternalServerError)
+			return
+
 		}
 
 		reloadCh <- errc
@@ -106,7 +114,7 @@ func Register(r *route.Router, curConf func() config.Config, confPath string, re
 	r.Get("/-/config", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Header().Set("Content-Type", CONF_HTTP_MIME_TYPE)
-		w.Write([]byte(curConf().String()))
+		fmt.Fprint(w, curConf())
 	}))
 
 	r.Get("/-/healthy", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
